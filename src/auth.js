@@ -7,11 +7,18 @@ async function createGoogleAppSession(user) {
   const email = user?.email?.trim().toLowerCase();
   if (!email) return false;
 
-  const staffEmail = process.env.DEMO_STAFF_EMAIL?.trim().toLowerCase();
+  const staffEmails = new Set(
+    [
+      process.env.DEMO_STAFF_EMAIL,
+      ...(process.env.DEMO_STAFF_EMAILS?.split(",") ?? []),
+    ]
+      .filter(Boolean)
+      .map((staffEmail) => staffEmail.trim().toLowerCase()),
+  );
   const appUser = {
     id: user.id || `google-${email.replace(/[^a-z0-9]+/gi, "-")}`,
     email,
-    role: staffEmail && email === staffEmail ? "staff" : "customer",
+    role: staffEmails.has(email) ? "staff" : "customer",
   };
 
   const cookieStore = await cookies();

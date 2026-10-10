@@ -15,6 +15,10 @@ DEMO_CUSTOMER_EMAIL=customer@example.com
 DEMO_CUSTOMER_PASSWORD=choose-a-local-demo-password
 DEMO_STAFF_EMAIL=staff@example.com
 DEMO_STAFF_PASSWORD=choose-a-local-demo-password
+# Optional additional credential accounts (JSON array; roles: customer or staff)
+DEMO_USERS_JSON='[{"email":"another.customer@example.com","password":"choose-a-password","role":"customer"},{"email":"another.staff@example.com","password":"choose-a-password","role":"staff"}]'
+# Optional comma-separated Google accounts granted the staff role
+DEMO_STAFF_EMAILS=staff-two@example.com,staff-three@example.com
 ```
 
 Configure this authorized redirect URI in the Google OAuth client:
@@ -23,7 +27,9 @@ Configure this authorized redirect URI in the Google OAuth client:
 http://localhost:3000/api/auth/callback/google
 ```
 
-Start the app with `npm run dev` and open `/signin`. Any Google account that provides an email can sign in. Google users default to the `customer` role; the address matching `DEMO_STAFF_EMAIL` receives the `staff` role. Email/password sign-in only accepts the two configured demo accounts.
+Start the app with `npm run dev` and open `/signin`. Any Google account that provides an email can sign in. Google users default to the `customer` role; addresses matching `DEMO_STAFF_EMAIL` or any entry in `DEMO_STAFF_EMAILS` receive the `staff` role. Email/password sign-in accepts the two legacy accounts (`DEMO_CUSTOMER_*` and `DEMO_STAFF_*`) plus accounts in `DEMO_USERS_JSON`. Each JSON account needs a unique email, password, and either the `customer` or `staff` role. Restart the development server after changing `.env.local`.
+
+The `staff` role can access both `/kitchen` and `/admin`. Give staff access only to people you trust. These environment-configured accounts are for the teaching demo; use a persistent user store and proper password hashing for a real multi-user service.
 
 ## App session and access rules
 
@@ -53,7 +59,7 @@ Google sign-in normally returns users to `/orders`, or to a valid `next` path wh
 
 1. Visit `/checkout` in a private window and confirm it redirects to sign-in. Complete Google sign-in and confirm the app returns to checkout with an active app session.
 2. Sign in with an ordinary Google account and confirm `/orders` loads and shows that account's email.
-3. Set `DEMO_STAFF_EMAIL` to a Google account you control, restart the app, and confirm that account can open `/kitchen`.
+3. Set `DEMO_STAFF_EMAILS` to two Google accounts you control, restart the app, and confirm both can open `/kitchen` and `/admin`.
 4. Sign in as a customer and request `/kitchen`; access must be denied by both the proxy and the server-rendered page.
 5. Sign out and request `/api/orders`; it should return `401`. Signed-in order reads must only expose orders owned by that session user.
 6. Try `/signin?next=https://example.com`; after sign-in, the app must stay on a local route.

@@ -4,6 +4,43 @@ import { createSessionToken, verifySessionToken } from "./session-token";
 const SESSION_COOKIE = "session";
 const SESSION_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
 
+function getAdditionalDemoUsers() {
+  const serializedUsers = process.env.DEMO_USERS_JSON;
+  if (!serializedUsers) return [];
+
+  try {
+    const configuredUsers = JSON.parse(serializedUsers);
+    if (!Array.isArray(configuredUsers)) throw new Error("Expected an array");
+
+    return configuredUsers.flatMap((candidate) => {
+      if (!candidate || typeof candidate !== "object") return [];
+
+      const email =
+        typeof candidate.email === "string"
+          ? candidate.email.trim().toLowerCase()
+          : "";
+      const password = candidate.password;
+      const role = candidate.role;
+
+      if (
+        !email ||
+        typeof password !== "string" ||
+        !password ||
+        !["customer", "staff"].includes(role)
+      ) {
+        return [];
+      }
+
+      return [{ id: `demo-${email}`, email, password, role }];
+    });
+  } catch {
+    console.error(
+      "DEMO_USERS_JSON must be a JSON array; additional demo accounts were ignored.",
+    );
+    return [];
+  }
+}
+
 export async function getSession() {
   const cookieStore = await cookies();
   return verifySessionToken(cookieStore.get(SESSION_COOKIE)?.value);
@@ -26,6 +63,7 @@ export async function authenticateCredentials(email, password) {
       password: process.env.DEMO_STAFF_PASSWORD,
       role: "staff",
     },
+    ...getAdditionalDemoUsers(),
   ];
 
   const user = users.find(
