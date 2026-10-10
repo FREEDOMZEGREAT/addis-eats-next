@@ -13,7 +13,7 @@ Addis Eats is a Next.js teaching app for an Ethiopian food-ordering experience i
 
 ## Production URL
 
-Configured canonical and deployment URL: [https://addis-eats.vercel.app](https://addis-eats.vercel.app). The deployment returned HTTP 404 during the 2026-10-10 project review; redeploy and verify it before sharing it as a live site.
+Configured canonical and deployment URL: [https://addis-eats-next-rho.vercel.app/] The deployment returned HTTP 404 during the 2026-10-10 project review; redeploy and verify it before sharing it as a live site.
 
 ## Getting started
 
@@ -39,7 +39,7 @@ In Bash:
 cp .env.example .env.local
 ```
 
-Replace the placeholders with local values. Use distinct random secrets, with `SESSION_SECRET` at least 32 characters. Configure Google OAuth if Google sign-in is needed. See [AUTH.md](AUTH.md) for the required values and callback URL. `.env.local` is ignored by Git.
+Replace the placeholders with local values. Use distinct random secrets, with `SESSION_SECRET` at least 32 characters. Customer accounts are stored locally under the ignored `data/` directory, so signup does not require MongoDB or a paid database. Configure Google OAuth if Google sign-in is needed. See [AUTH.md](AUTH.md) for details. `.env.local` is ignored by Git.
 
 Start the development server:
 
@@ -68,25 +68,26 @@ npm run lint
 - In-memory cart with quantity editing; cart contents reset on a full page reload
 - Checkout through a server action with schema validation and server-side pricing
 - Google OAuth and configured demo email/password sign-in
+- Customer account registration with local file persistence and scrypt password hashing
 - Customer order history and a staff-only kitchen queue
 - Staff-only admin dashboard with order charts, URL-sorted tables, and pagination
 
 ## Route overview
 
-| Route                                | Purpose                                  | Rendering pattern                       |
-| ------------------------------------ | ---------------------------------------- | --------------------------------------- |
-| `/`                                  | Today's Specials                         | Revalidated page (one hour)             |
-| `/menu`                              | Category-filtered menu                   | Revalidated page (one hour)             |
-| `/menu/[id]`                         | Individual dish details + SEO metadata   | Static generation with generated params |
-| `/cart`                              | Cart review and quantity editing         | Client-side cart state                  |
-| `/checkout`                          | Order submission                         | Dynamic route and server action         |
-| `/orders`                            | Signed-in user's orders                  | Dynamic, session-protected route        |
-| `/kitchen`                           | Staff order queue                        | Dynamic, staff-protected route          |
-| `/admin`                             | Order analytics and paged order table    | Dynamic, staff-protected server page    |
-| `/signin`                            | Google OAuth or demo credentials         | App route                               |
-| `/api/auth/[...nextauth]`            | NextAuth provider callbacks              | Route handler                           |
-| `/api/dishes` and `/api/dishes/[id]` | Dish listing and detail APIs             | Route handlers                          |
-| `/api/orders` and `/api/orders/[id]` | Order creation, listing, and detail APIs | Protected route handlers                |
+| Route                                | Purpose                                                              | Rendering pattern                       |
+| ------------------------------------ | -------------------------------------------------------------------- | --------------------------------------- |
+| `/`                                  | Today's Specials                                                     | Revalidated page (one hour)             |
+| `/menu`                              | Category-filtered menu                                               | Revalidated page (one hour)             |
+| `/menu/[id]`                         | Individual dish details + SEO metadata                               | Static generation with generated params |
+| `/cart`                              | Cart review and quantity editing                                     | Client-side cart state                  |
+| `/checkout`                          | Order submission                                                     | Dynamic route and server action         |
+| `/orders`                            | Signed-in user's orders                                              | Dynamic, session-protected route        |
+| `/kitchen`                           | Staff order queue                                                    | Dynamic, staff-protected route          |
+| `/admin`                             | Order analytics and paged order table                                | Dynamic, staff-protected server page    |
+| `/signin` and `/signup`              | Google OAuth, demo credentials, and locally stored customer accounts | App routes                              |
+| `/api/auth/[...nextauth]`            | NextAuth provider callbacks                                          | Route handler                           |
+| `/api/dishes` and `/api/dishes/[id]` | Dish listing and detail APIs                                         | Route handlers                          |
+| `/api/orders` and `/api/orders/[id]` | Order creation, listing, and detail APIs                             | Protected route handlers                |
 
 ## SEO and metadata implementation
 
@@ -104,6 +105,8 @@ The current Day 44 update adds metadata to the app using Next.js App Router conv
 - The cart is provided through `src/app/providers.jsx` and persisted in the browser.
 - The app's authorization cookie is created and verified by `src/lib/session.js` and `src/lib/session-token.js`.
 - Order prices and delivery fees are recomputed on the server; browser-provided totals are not trusted.
+- Registered customer accounts are stored in the ignored local `data/users.json` file by `src/lib/users.js`; passwords are scrypt-hashed. No external database is required for local development.
+- Local file-backed accounts are not suitable for Vercel/serverless or multi-instance deployments because their filesystem is ephemeral and instance-local.
 - Order writes use the serialized in-memory flow in `src/lib/orders.js`.
 - Orders are lost when the server restarts. This is a teaching demo, not a production backend or payment integration.
 

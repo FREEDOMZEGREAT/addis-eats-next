@@ -10,6 +10,7 @@ export default function robots() {
         "/checkout",
         "/orders",
         "/signin",
+        "/signup",
         "/kitchen",
         "/admin",
         "/api/",

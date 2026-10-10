@@ -111,6 +111,16 @@ export default async function SignInPage({ searchParams }) {
       </div>
 
       <p className="mt-5 text-sm text-sand-500">
+        New to Addis Eats?{" "}
+        <Link
+          href={`/signup${nextPath ? `?next=${encodeURIComponent(nextPath)}` : ""}`}
+          className="font-semibold text-brand-700"
+        >
+          Create an account
+        </Link>
+      </p>
+
+      <p className="mt-3 text-sm text-sand-500">
         Return to the{" "}
         <Link href="/" className="font-semibold text-brand-700">
           menu

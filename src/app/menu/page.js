@@ -1,8 +1,15 @@
 import { Suspense } from "react";
-import { getDishesByCategory, categories } from "@/lib/dishes";
+import {
+  getDishesByCategory,
+  categories,
+  dishes as menuDishes,
+} from "@/lib/dishes";
 import CategoryBar from "./CategoryBar";
 import LiveDishSearch from "./SearchBox";
 import { SITE_URL, SOCIAL_IMAGE, serializeJsonLd } from "@/lib/site";
+
+const menuSocialImage = menuDishes[0]?.image ?? SOCIAL_IMAGE;
+
 export const revalidate = 3600;
 
 export const metadata = {
@@ -15,7 +22,13 @@ export const metadata = {
     title: "Addis Eats Menu",
     description: "Explore Ethiopian dishes, sides, and drinks from Addis Eats.",
     url: "/menu",
-    images: [SOCIAL_IMAGE],
+    images: [menuSocialImage],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Addis Eats Menu",
+    description: "Explore Ethiopian dishes, sides, and drinks from Addis Eats.",
+    images: [menuSocialImage],
   },
 };
 
@@ -34,6 +47,7 @@ export default async function MenuPage({ searchParams }) {
       position: index + 1,
       url: `${SITE_URL}/menu/${dish.id}`,
       name: dish.name,
+      image: new URL(dish.image, SITE_URL).toString(),
     })),
   };
 

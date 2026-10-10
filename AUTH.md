@@ -27,19 +27,22 @@ Configure this authorized redirect URI in the Google OAuth client:
 http://localhost:3000/api/auth/callback/google
 ```
 
-Start the app with `npm run dev` and open `/signin`. Any Google account that provides an email can sign in. Google users default to the `customer` role; addresses matching `DEMO_STAFF_EMAIL` or any entry in `DEMO_STAFF_EMAILS` receive the `staff` role. Email/password sign-in accepts the two legacy accounts (`DEMO_CUSTOMER_*` and `DEMO_STAFF_*`) plus accounts in `DEMO_USERS_JSON`. Each JSON account needs a unique email, password, and either the `customer` or `staff` role. Restart the development server after changing `.env.local`.
+No external database is required. Start the app with `npm run dev` and open `/signin`. From there, new customers can follow **Create an account**; signup returns to the requested local path, including `/checkout`. New accounts are customer-only, emails are unique and normalized, and passwords of 12-128 characters are scrypt-hashed before storage in the ignored local `data/users.json` file. Existing credential accounts continue to work.
+
+Any Google account that provides an email can sign in. Google users default to the `customer` role; addresses matching `DEMO_STAFF_EMAIL` or any entry in `DEMO_STAFF_EMAILS` receive the `staff` role. Email/password sign-in accepts the two legacy accounts (`DEMO_CUSTOMER_*` and `DEMO_STAFF_*`), locally registered accounts, plus optional accounts in `DEMO_USERS_JSON`. Each JSON account needs a unique email, password, and either the `customer` or `staff` role. Restart the development server after changing `.env.local`.
 
 The `staff` role can access both `/kitchen` and `/admin`. Give staff access only to people you trust. These environment-configured accounts are for the teaching demo; use a persistent user store and proper password hashing for a real multi-user service.
 
 ## App session and access rules
 
-After Google OAuth succeeds, `src/auth.js` creates the same app session used by the email/password flow. The cookie is named `session`, lasts eight hours, is `httpOnly`, uses `sameSite=lax`, and is marked `secure` in production. `SESSION_SECRET` must be at least 32 characters. NextAuth uses `AUTH_SECRET` for its provider flow.
+After Google OAuth or account signup succeeds, `src/auth.js` or `src/app/auth-actions.js` creates the app session. The cookie is named `session`, lasts seven days, is `httpOnly`, uses `sameSite=lax`, and is marked `secure` in production. `SESSION_SECRET` must be at least 32 characters. NextAuth uses `AUTH_SECRET` for its provider flow.
 
 | Route or operation                           | Security layers                                                                                                                                               |
 | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `/checkout`, `/orders`, `/kitchen`, `/admin` | `src/proxy.js` verifies the signed session cookie before routing. Unauthenticated requests go to `/signin`; kitchen/admin require staff at the proxy.         |
 | `/orders`, `/kitchen`, `/admin` pages        | Each server page independently reads the app session. Orders query only the current session user ID; kitchen/admin pages also check the staff role.           |
 | `placeOrder`, `cancelOrder` server actions   | Each action re-reads the app session. Placement validates the payload and recomputes prices server-side; cancellation checks the order owner before mutation. |
+| `signUp` server action                       | Validates email/password, assigns only the `customer` role, scrypt-hashes passwords, and persists accounts in the local ignored user file.                    |
 | `/api/orders`                                | Each method verifies the app session; reads are scoped to its user ID and writes are validated server-side.                                                   |
 | `/api/orders/[id]`                           | Verifies the app session and returns an order only if its `userId` matches the session user.                                                                  |
 | Sign-in/sign-out server actions              | Sign-in validates configured credentials before creating a signed app session and sanitizes `next`; sign-out deletes the app session cookie.                  |
@@ -59,11 +62,12 @@ Google sign-in normally returns users to `/orders`, or to a valid `next` path wh
 
 1. Visit `/checkout` in a private window and confirm it redirects to sign-in. Complete Google sign-in and confirm the app returns to checkout with an active app session.
 2. Sign in with an ordinary Google account and confirm `/orders` loads and shows that account's email.
-3. Set `DEMO_STAFF_EMAILS` to two Google accounts you control, restart the app, and confirm both can open `/kitchen` and `/admin`.
-4. Sign in as a customer and request `/kitchen`; access must be denied by both the proxy and the server-rendered page.
-5. Sign out and request `/api/orders`; it should return `401`. Signed-in order reads must only expose orders owned by that session user.
-6. Try `/signin?next=https://example.com`; after sign-in, the app must stay on a local route.
+3. Create a fresh account at `/signup`; confirm it becomes a customer, can submit an order, and can only read its own order history. Duplicate email registration should be rejected.
+4. Set `DEMO_STAFF_EMAILS` to two Google accounts you control, restart the app, and confirm both can open `/kitchen` and `/admin`.
+5. Sign in as a customer and request `/kitchen`; access must be denied by both the proxy and the server-rendered page.
+6. Sign out and request `/api/orders`; it should return `401`. Signed-in order reads must only expose orders owned by that session user.
+7. Try `/signin?next=https://example.com`; after sign-in, the app must stay on a local route.
 
 ## Demo limitations
 
-Demo credentials and secrets are environment-configured. Orders are stored in memory in `src/lib/orders.js` and are lost when the server restarts. This teaching app does not provide a user database, password hashing, persistent order storage, rate limiting, or production secret management; do not treat it as production-ready authentication.
+Demo credentials and secrets are environment-configured. Registered accounts persist locally in `data/users.json`, but this file-based store is for a single local server only; it will not persist correctly on Vercel/serverless or across multiple server instances. Orders are stored in memory in `src/lib/orders.js` and are lost when the server restarts. Signup does not yet include email verification, password reset, or rate limiting; use persistent production storage and abuse protection before exposing it publicly.

@@ -19,6 +19,13 @@ export const metadata = {
     url: "/",
     images: [SOCIAL_IMAGE],
   },
+  twitter: {
+    card: "summary_large_image",
+    title: "Ethiopian Food Delivery in Addis Ababa | Addis Eats",
+    description:
+      "Traditional Ethiopian dishes cooked the way our grandmothers taught us. Injera, kitfo, shiro and coffee, delivered across Addis Ababa.",
+    images: [SOCIAL_IMAGE],
+  },
 };
 
 export default async function HomePage() {

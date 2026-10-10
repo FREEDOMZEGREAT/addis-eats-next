@@ -7,13 +7,21 @@ import {
   destroySession,
 } from "@/lib/session";
 import { safeRedirectPath } from "@/lib/session-token";
+import { isReservedAccountEmail } from "@/lib/session";
+import { createCustomerAccount } from "@/lib/users";
 
 export async function signIn(formData) {
   const requestedNext = formData.get("next");
-  const user = await authenticateCredentials(
-    formData.get("email"),
-    formData.get("password"),
-  );
+  let user;
+  try {
+    user = await authenticateCredentials(
+      formData.get("email"),
+      formData.get("password"),
+    );
+  } catch (error) {
+    console.error("Account sign-in lookup failed.", error.name);
+    redirect("/signin?error=unavailable");
+  }
 
   if (!user) {
     const nextPath = safeRedirectPath(requestedNext);
@@ -27,6 +35,48 @@ export async function signIn(formData) {
       user.role === "staff" ? "/kitchen" : "/orders",
     ),
   );
+}
+
+export async function signUp(formData) {
+  const nextPath = safeRedirectPath(formData.get("next"));
+  const emailValue = formData.get("email");
+  const password = formData.get("password");
+  const confirmation = formData.get("confirmPassword");
+  const email =
+    typeof emailValue === "string" ? emailValue.trim().toLowerCase() : "";
+
+  if (
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+    email.length > 254 ||
+    typeof password !== "string" ||
+    password.length < 12 ||
+    password.length > 128
+  ) {
+    redirect(`/signup?error=invalid&next=${encodeURIComponent(nextPath)}`);
+  }
+
+  if (password !== confirmation) {
+    redirect(`/signup?error=mismatch&next=${encodeURIComponent(nextPath)}`);
+  }
+
+  if (isReservedAccountEmail(email)) {
+    redirect(`/signup?error=exists&next=${encodeURIComponent(nextPath)}`);
+  }
+
+  let user;
+  try {
+    user = await createCustomerAccount(email, password);
+  } catch (error) {
+    console.error("Account registration failed.", error.name);
+    redirect(`/signup?error=unavailable&next=${encodeURIComponent(nextPath)}`);
+  }
+
+  if (!user) {
+    redirect(`/signup?error=exists&next=${encodeURIComponent(nextPath)}`);
+  }
+
+  await createSession(user);
+  redirect(nextPath);
 }
 
 export async function signOut() {

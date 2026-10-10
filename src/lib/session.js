@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { createSessionToken, verifySessionToken } from "./session-token";
+import { authenticateRegisteredCustomer } from "./users";
 
 const SESSION_COOKIE = "session";
 const SESSION_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
@@ -41,6 +42,21 @@ function getAdditionalDemoUsers() {
   }
 }
 
+export function isReservedAccountEmail(email) {
+  const normalizedEmail = email.trim().toLowerCase();
+  const configuredEmails = [
+    process.env.DEMO_CUSTOMER_EMAIL,
+    process.env.DEMO_STAFF_EMAIL,
+    ...(process.env.DEMO_STAFF_EMAILS?.split(",") ?? []),
+    ...getAdditionalDemoUsers().map((user) => user.email),
+  ];
+
+  return configuredEmails.some(
+    (configuredEmail) =>
+      configuredEmail?.trim().toLowerCase() === normalizedEmail,
+  );
+}
+
 export async function getSession() {
   const cookieStore = await cookies();
   return verifySessionToken(cookieStore.get(SESSION_COOKIE)?.value);
@@ -74,8 +90,8 @@ export async function authenticateCredentials(email, password) {
       candidate.password === password,
   );
 
-  if (!user) return null;
-  return { id: user.id, email: user.email, role: user.role };
+  if (user) return { id: user.id, email: user.email, role: user.role };
+  return authenticateRegisteredCustomer(normalizedEmail, password);
 }
 
 export async function createSession(user) {
