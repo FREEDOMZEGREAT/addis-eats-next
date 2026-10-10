@@ -1,0 +1,63 @@
+# Authentication
+
+Addis Eats supports Google OAuth through NextAuth and a separate demo email/password form. Both flows create the app's custom `session` cookie; the app uses that cookie for authorization on protected pages and order operations.
+
+## Local setup
+
+Create `.env.local` in the project root and set these variables. Keep the file private and never commit real credentials.
+
+```dotenv
+AUTH_GOOGLE_ID=your-google-oauth-client-id
+AUTH_GOOGLE_SECRET=your-google-oauth-client-secret
+AUTH_SECRET=replace-with-a-random-secret
+SESSION_SECRET=replace-with-a-random-secret-of-at-least-32-characters
+DEMO_CUSTOMER_EMAIL=customer@example.com
+DEMO_CUSTOMER_PASSWORD=choose-a-local-demo-password
+DEMO_STAFF_EMAIL=staff@example.com
+DEMO_STAFF_PASSWORD=choose-a-local-demo-password
+```
+
+Configure this authorized redirect URI in the Google OAuth client:
+
+```text
+http://localhost:3000/api/auth/callback/google
+```
+
+Start the app with `npm run dev` and open `/signin`. Any Google account that provides an email can sign in. Google users default to the `customer` role; the address matching `DEMO_STAFF_EMAIL` receives the `staff` role. Email/password sign-in only accepts the two configured demo accounts.
+
+## App session and access rules
+
+After Google OAuth succeeds, `src/auth.js` creates the same app session used by the email/password flow. The cookie is named `session`, lasts eight hours, is `httpOnly`, uses `sameSite=lax`, and is marked `secure` in production. `SESSION_SECRET` must be at least 32 characters. NextAuth uses `AUTH_SECRET` for its provider flow.
+
+| Route or operation                           | Security layers                                                                                                                                               |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/checkout`, `/orders`, `/kitchen`, `/admin` | `src/proxy.js` verifies the signed session cookie before routing. Unauthenticated requests go to `/signin`; kitchen/admin require staff at the proxy.         |
+| `/orders`, `/kitchen`, `/admin` pages        | Each server page independently reads the app session. Orders query only the current session user ID; kitchen/admin pages also check the staff role.           |
+| `placeOrder`, `cancelOrder` server actions   | Each action re-reads the app session. Placement validates the payload and recomputes prices server-side; cancellation checks the order owner before mutation. |
+| `/api/orders`                                | Each method verifies the app session; reads are scoped to its user ID and writes are validated server-side.                                                   |
+| `/api/orders/[id]`                           | Verifies the app session and returns an order only if its `userId` matches the session user.                                                                  |
+| Sign-in/sign-out server actions              | Sign-in validates configured credentials before creating a signed app session and sanitizes `next`; sign-out deletes the app session cookie.                  |
+| Sign-in redirects                            | `safeRedirectPath` rejects external, protocol-relative, and backslash-containing destinations before redirecting.                                             |
+
+The proxy is an early gate, not the sole authorization check. The signed `session` cookie is the authorization source; a browser-provided identity or NextAuth provider session alone does not grant app-route access.
+
+Google sign-in normally returns users to `/orders`, or to a valid `next` path when one was requested. Configure the staff Google address as `DEMO_STAFF_EMAIL` to grant kitchen access.
+
+## Security attack tests
+
+1. **Forged session / role escalation:** Change a signed cookie's payload or role to `staff` without a valid HMAC, then request `/admin`, `/kitchen`, and `/api/orders`. Expect protected pages to redirect/deny access and the API to return `401`; changing the role claim must not grant staff access.
+2. **Order IDOR:** Sign in as customer A, then request `/api/orders/<customer-B-order-id>` and invoke cancellation with that ID. Expect the detail API to return `404`, cancellation to fail, and customer B's order status to remain unchanged.
+3. **Open redirect:** Sign in with `next=https://attacker.example`, `next=//attacker.example`, and a backslash-based destination such as `next=/\\attacker.example`. Try both credential and Google sign-in. Expect every redirect to remain on an allowed local path.
+
+## Manual verification
+
+1. Visit `/checkout` in a private window and confirm it redirects to sign-in. Complete Google sign-in and confirm the app returns to checkout with an active app session.
+2. Sign in with an ordinary Google account and confirm `/orders` loads and shows that account's email.
+3. Set `DEMO_STAFF_EMAIL` to a Google account you control, restart the app, and confirm that account can open `/kitchen`.
+4. Sign in as a customer and request `/kitchen`; access must be denied by both the proxy and the server-rendered page.
+5. Sign out and request `/api/orders`; it should return `401`. Signed-in order reads must only expose orders owned by that session user.
+6. Try `/signin?next=https://example.com`; after sign-in, the app must stay on a local route.
+
+## Demo limitations
+
+Demo credentials and secrets are environment-configured. Orders are stored in memory in `src/lib/orders.js` and are lost when the server restarts. This teaching app does not provide a user database, password hashing, persistent order storage, rate limiting, or production secret management; do not treat it as production-ready authentication.

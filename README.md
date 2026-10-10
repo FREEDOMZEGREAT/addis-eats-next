@@ -1,0 +1,125 @@
+# Addis Eats
+
+Addis Eats is a Next.js teaching app for an Ethiopian food-ordering experience in Addis Ababa. It demonstrates App Router rendering, Google OAuth, custom app sessions, client-side cart state, server-side order validation, route handlers, and metadata/SEO best practices for product pages.
+
+## Tech stack
+
+- Next.js 16.3.6 App Router
+- React 19
+- Tailwind CSS 4
+- NextAuth v5 beta with Google OAuth
+- Zod validation
+- Metadata and Open Graph configuration in App Router
+
+## Production URL
+
+Configured canonical and deployment URL: [https://addis-eats.vercel.app](https://addis-eats.vercel.app). The deployment returned HTTP 404 during the 2026-10-10 project review; redeploy and verify it before sharing it as a live site.
+
+## Getting started
+
+Prerequisite: Node.js 20.9 or newer and Git.
+
+Clone the repository and enter the app directory:
+
+```bash
+git clone https://github.com/IBT-Qiyas-Full-Stack-Academy/sq2-netsanet-degu.git
+cd sq2-netsanet-degu/module-03-react-nextjs/project/addis-eats-next
+npm ci
+```
+
+Create a private environment file from the safe template. In PowerShell:
+
+```powershell
+Copy-Item .env.example .env.local
+```
+
+In Bash:
+
+```bash
+cp .env.example .env.local
+```
+
+Replace the placeholders with local values. Use distinct random secrets, with `SESSION_SECRET` at least 32 characters. Configure Google OAuth if Google sign-in is needed. See [AUTH.md](AUTH.md) for the required values and callback URL. `.env.local` is ignored by Git.
+
+Start the development server:
+
+```bash
+npm run dev
+```
+
+Open `http://localhost:3000`. Google and demo email/password authentication require the environment variables described in [AUTH.md](AUTH.md).
+
+Available scripts:
+
+```bash
+npm run dev
+npm run build
+npm run start
+npm run lint
+```
+
+## Features
+
+- Home page featuring Doro Wat, Tibs, and Ethiopian Coffee under “Today's Specials”
+- Menu browsing with horizontal category filters and debounced live search
+- Dish detail pages generated from the dish catalog
+- Dynamic SEO metadata for each dish page and a global site metadata configuration
+- Open Graph metadata and title template setup for better sharing and page previews
+- In-memory cart with quantity editing; cart contents reset on a full page reload
+- Checkout through a server action with schema validation and server-side pricing
+- Google OAuth and configured demo email/password sign-in
+- Customer order history and a staff-only kitchen queue
+- Staff-only admin dashboard with order charts, URL-sorted tables, and pagination
+
+## Route overview
+
+| Route                                | Purpose                                  | Rendering pattern                       |
+| ------------------------------------ | ---------------------------------------- | --------------------------------------- |
+| `/`                                  | Today's Specials                         | Revalidated page (one hour)             |
+| `/menu`                              | Category-filtered menu                   | Revalidated page (one hour)             |
+| `/menu/[id]`                         | Individual dish details + SEO metadata   | Static generation with generated params |
+| `/cart`                              | Cart review and quantity editing         | Client-side cart state                  |
+| `/checkout`                          | Order submission                         | Dynamic route and server action         |
+| `/orders`                            | Signed-in user's orders                  | Dynamic, session-protected route        |
+| `/kitchen`                           | Staff order queue                        | Dynamic, staff-protected route          |
+| `/admin`                             | Order analytics and paged order table    | Dynamic, staff-protected server page    |
+| `/signin`                            | Google OAuth or demo credentials         | App route                               |
+| `/api/auth/[...nextauth]`            | NextAuth provider callbacks              | Route handler                           |
+| `/api/dishes` and `/api/dishes/[id]` | Dish listing and detail APIs             | Route handlers                          |
+| `/api/orders` and `/api/orders/[id]` | Order creation, listing, and detail APIs | Protected route handlers                |
+
+## SEO and metadata implementation
+
+The current Day 44 update adds metadata to the app using Next.js App Router conventions:
+
+- Global site metadata is defined in `src/app/layout.js`.
+- The app sets `metadataBase`, a default title, a `%s` title template, description text, and Open Graph defaults.
+- Each dish page uses `generateMetadata` in `src/app/menu/[id]/page.js` to return a page-specific title and description based on the dish record.
+- The route also uses `generateStaticParams` and `dynamicParams = false` so dish pages are statically generated and keep predictable metadata and URL behavior.
+
+## Data and guardrails
+
+- The dish catalog is defined in `src/lib/dishes.js`.
+- The order schema and delivery area fees live in `src/lib/schema.js`.
+- The cart is provided through `src/app/providers.jsx` and persisted in the browser.
+- The app's authorization cookie is created and verified by `src/lib/session.js` and `src/lib/session-token.js`.
+- Order prices and delivery fees are recomputed on the server; browser-provided totals are not trusted.
+- Order writes use the serialized in-memory flow in `src/lib/orders.js`.
+- Orders are lost when the server restarts. This is a teaching demo, not a production backend or payment integration.
+
+See [DATA.md](DATA.md) for query locations, logical keys, refresh behavior, and cache/privacy notes. See [PERF.md](PERF.md) for the performance budget and before/after measurements.
+
+## Teaching goals
+
+Day 44 extends the live app with metadata and SEO best practices. The focus is on app-level site metadata, per-page metadata generation, Open Graph setup, and keeping route metadata aligned with the product data model. The project still reinforces Next.js static generation, revalidation, dynamic rendering, server actions, route handlers, authentication flow, and role-based access.
+
+## Project structure
+
+```text
+src/
+  app/              App Router pages, route handlers, and UI components
+  lib/              Catalog, session, validation, pricing, and order helpers
+  auth.js           NextAuth Google provider and app-session bridge
+public/
+  dishes/           Menu image assets
+```
