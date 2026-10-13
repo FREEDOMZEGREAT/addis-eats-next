@@ -1,30 +1,31 @@
 import { randomUUID } from "node:crypto";
+import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { neon } from "@neondatabase/serverless";
 import { priceCart } from "./dishes";
 import { AREA_FEE } from "./schema";
 
-// Local development falls back to an in-memory store. Production (Vercel) has
-// no persistent filesystem, so orders are written to Neon Postgres whenever
-// DATABASE_URL is configured.
+// Orders fall back to an in-memory store mirrored to a JSON file whenever
+// DATABASE_URL is not configured, in every environment. Serverless hosts such
+// as Vercel have a read-only or ephemeral filesystem, so there the mirror lives
+// in the OS temp directory: orders survive across requests within an instance
+// but not across a cold start or a different instance. Set DATABASE_URL for
+// durable persistence.
 //
 // The fallback hangs off globalThis so every route/server component in the
-// dev process shares a single array; a plain module variable is isolated per
-// route graph and drops orders between pages. This is still per-process and
-// clears on restart — it is only a local-development convenience.
+// process shares a single array; a plain module variable is isolated per
+// route graph and drops orders between pages.
 const globalStore = globalThis;
-const orders = (globalStore.__addisOrders ??= []);
+if (!globalStore.__addisOrders) globalStore.__addisOrders = [];
+const orders = globalStore.__addisOrders;
 
 let databaseClient;
 let databaseSchemaPromise;
 
 async function getOrderDatabase() {
   const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) {
-    if (process.env.NODE_ENV === "production") {
-      throw new Error("DATABASE_URL must be configured in production.");
-    }
-    return null;
-  }
+  if (!connectionString) return null;
 
   databaseClient ??= neon(connectionString);
   databaseSchemaPromise ??= databaseClient`
@@ -54,6 +55,61 @@ async function getOrderDatabase() {
 
   await databaseSchemaPromise;
   return databaseClient;
+}
+
+function getOrdersFilePath() {
+  if (process.env.ORDERS_FILE) return process.env.ORDERS_FILE;
+  if (process.env.NODE_ENV === "production") {
+    return path.join(os.tmpdir(), "addis-eats-orders.json");
+  }
+  return path.join(process.cwd(), "data", "orders.json");
+}
+
+let writeQueue = Promise.resolve();
+
+function serializeWrite(operation) {
+  const result = writeQueue.then(operation, operation);
+  writeQueue = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result;
+}
+
+async function persistOrders() {
+  try {
+    const ordersFile = getOrdersFilePath();
+    await mkdir(path.dirname(ordersFile), { recursive: true, mode: 0o700 });
+    const temporaryFile = `${ordersFile}.${randomUUID()}.tmp`;
+
+    try {
+      await writeFile(temporaryFile, JSON.stringify(orders), {
+        encoding: "utf8",
+        mode: 0o600,
+      });
+      await rename(temporaryFile, ordersFile);
+    } finally {
+      await unlink(temporaryFile).catch(() => {});
+    }
+  } catch {
+    // Read-only or ephemeral filesystem — keep the in-memory store only.
+  }
+}
+
+async function loadOrders() {
+  if (orders.length > 0) return orders;
+
+  try {
+    const contents = await readFile(getOrdersFilePath(), "utf8");
+    const savedOrders = JSON.parse(contents);
+    if (Array.isArray(savedOrders) && savedOrders.length > 0) {
+      orders.push(...savedOrders);
+    }
+  } catch {
+    // Missing, unreadable, or invalid file — start from the in-memory store.
+  }
+
+  return orders;
 }
 
 function rowToOrder(row) {
@@ -121,7 +177,9 @@ export async function createOrder(data, userId) {
     createdAt: new Date().toISOString(),
   };
 
+  await loadOrders();
   orders.push(order);
+  await serializeWrite(() => persistOrders());
   return order;
 }
 
@@ -137,6 +195,7 @@ export async function getOrders(userId) {
     return rows.map(rowToOrder);
   }
 
+  await loadOrders();
   return orders.filter((order) => order.userId === userId);
 }
 
@@ -148,6 +207,7 @@ export async function getAllOrders() {
     return rows.map(rowToOrder);
   }
 
+  await loadOrders();
   return [...orders];
 }
 
@@ -161,6 +221,7 @@ export async function getOrder(id) {
     return rows[0] ? rowToOrder(rows[0]) : null;
   }
 
+  await loadOrders();
   return orders.find((order) => order.id === id) ?? null;
 }
 
@@ -177,10 +238,12 @@ export async function markCancelled(id) {
     return rows[0] ? rowToOrder(rows[0]) : null;
   }
 
+  await loadOrders();
   const order = orders.find((entry) => entry.id === id);
   if (order) {
     order.status = "cancelled";
     order.cancelledAt = new Date().toISOString();
+    await serializeWrite(() => persistOrders());
   }
   return order ?? null;
 }
