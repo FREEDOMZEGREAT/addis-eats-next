@@ -2,6 +2,7 @@ import "./globals.css";
 import Link from "next/link";
 import { Inter, Fraunces } from "next/font/google";
 import { Providers } from "./providers";
+import SwrProvider from "./swr-provider";
 import NavLinks from "./NavLinks";
 import CartButton from "./CartButton";
 import { SITE_URL, SOCIAL_IMAGE } from "@/lib/site";
@@ -111,7 +112,7 @@ export default function RootLayout({ children }) {
           </header>
 
           <main id="main" className="flex-1">
-            {children}
+            <SwrProvider>{children}</SwrProvider>
           </main>
 
           <footer className="mt-16 border-t border-sand-200 bg-white">

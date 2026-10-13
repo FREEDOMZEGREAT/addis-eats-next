@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getAllOrders } from "@/lib/orders";
+import { getDishName } from "@/lib/dishes";
 import { getSession } from "@/lib/session";
 import SignOutButton from "@/app/SignOutButton";
 
@@ -51,7 +52,7 @@ export default async function KitchenPage() {
               </div>
               <p className="min-w-36 flex-1 text-sm text-sand-600">
                 {order.items
-                  .map((item) => `${item.qty}× ${item.id}`)
+                  .map((item) => `${item.qty}× ${getDishName(item.id)}`)
                   .join(", ")}
               </p>
               <span className="badge badge-gold">{order.status}</span>

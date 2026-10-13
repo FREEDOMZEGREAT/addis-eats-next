@@ -11,6 +11,8 @@ AUTH_GOOGLE_ID=your-google-oauth-client-id
 AUTH_GOOGLE_SECRET=your-google-oauth-client-secret
 AUTH_SECRET=replace-with-a-random-secret
 SESSION_SECRET=replace-with-a-random-secret-of-at-least-32-characters
+# Required on Vercel; create a Neon Postgres database and use its pooled connection string
+DATABASE_URL=postgresql://user:password@host/database?sslmode=require
 DEMO_CUSTOMER_EMAIL=customer@example.com
 DEMO_CUSTOMER_PASSWORD=choose-a-local-demo-password
 DEMO_STAFF_EMAIL=staff@example.com
@@ -27,7 +29,7 @@ Configure this authorized redirect URI in the Google OAuth client:
 http://localhost:3000/api/auth/callback/google
 ```
 
-No external database is required for local development. Start the app with `npm run dev` and open `/signin`. From there, new customers can follow **Create an account**; signup returns to the requested local path, including `/checkout`. New accounts are customer-only, emails are unique and normalized, and passwords of 6-128 characters are scrypt-hashed before storage in the ignored local `data/users.json` file. Existing credential accounts continue to work.
+No external database is required for local development. Start the app with `npm run dev` and open `/signin`. From there, new customers can follow **Create an account**; signup returns to the requested local path, including `/checkout`. New accounts are customer-only, emails are unique and normalized, and passwords of 6-128 characters are scrypt-hashed before storage in the ignored local `data/users.json` file. In production, set `DATABASE_URL` to a Neon Postgres connection string; the account table is created automatically and used for signup and email/password sign-in. Existing credential accounts continue to work.
 
 Any Google account that provides an email can sign in. Google users default to the `customer` role; addresses matching `DEMO_STAFF_EMAIL` or any entry in `DEMO_STAFF_EMAILS` receive the `staff` role. Email/password sign-in accepts the two legacy accounts (`DEMO_CUSTOMER_*` and `DEMO_STAFF_*`), locally registered accounts, plus optional accounts in `DEMO_USERS_JSON`. Each JSON account needs a unique email, password, and either the `customer` or `staff` role. Restart the development server after changing `.env.local`.
 
@@ -37,16 +39,16 @@ The `staff` role can access both `/kitchen` and `/admin`. Give staff access only
 
 After Google OAuth or account signup succeeds, `src/auth.js` or `src/app/auth-actions.js` creates the app session. The cookie is named `session`, lasts seven days, is `httpOnly`, uses `sameSite=lax`, and is marked `secure` in production. `SESSION_SECRET` must be at least 32 characters. NextAuth uses `AUTH_SECRET` for its provider flow.
 
-| Route or operation                           | Security layers                                                                                                                                               |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/checkout`, `/orders`, `/kitchen`, `/admin` | `src/proxy.js` verifies the signed session cookie before routing. Unauthenticated requests go to `/signin`; kitchen/admin require staff at the proxy.         |
-| `/orders`, `/kitchen`, `/admin` pages        | Each server page independently reads the app session. Orders query only the current session user ID; kitchen/admin pages also check the staff role.           |
-| `placeOrder`, `cancelOrder` server actions   | Each action re-reads the app session. Placement validates the payload and recomputes prices server-side; cancellation checks the order owner before mutation. |
-| `signUp` server action                       | Validates email/password, assigns only the `customer` role, scrypt-hashes passwords, and persists accounts in the local ignored user file.                    |
-| `/api/orders`                                | Each method verifies the app session; reads are scoped to its user ID and writes are validated server-side.                                                   |
-| `/api/orders/[id]`                           | Verifies the app session and returns an order only if its `userId` matches the session user.                                                                  |
-| Sign-in/sign-out server actions              | Sign-in validates configured credentials before creating a signed app session and sanitizes `next`; sign-out deletes the app session cookie.                  |
-| Sign-in redirects                            | `safeRedirectPath` rejects external, protocol-relative, and backslash-containing destinations before redirecting.                                             |
+| Route or operation                           | Security layers                                                                                                                                                                                   |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/checkout`, `/orders`, `/kitchen`, `/admin` | `src/proxy.js` verifies the signed session cookie before routing. Unauthenticated requests go to `/signin`; kitchen/admin require staff at the proxy.                                             |
+| `/orders`, `/kitchen`, `/admin` pages        | Each server page independently reads the app session. Orders query only the current session user ID; kitchen/admin pages also check the staff role.                                               |
+| `placeOrder`, `cancelOrder` server actions   | Each action re-reads the app session. Placement validates the payload and recomputes prices server-side; cancellation checks the order owner before mutation.                                     |
+| `signUp` server action                       | Validates name/email/password, assigns only the `customer` role, scrypt-hashes passwords, and persists accounts in Neon Postgres in production or the local ignored user file during development. |
+| `/api/orders`                                | Each method verifies the app session; reads are scoped to its user ID and writes are validated server-side.                                                                                       |
+| `/api/orders/[id]`                           | Verifies the app session and returns an order only if its `userId` matches the session user.                                                                                                      |
+| Sign-in/sign-out server actions              | Sign-in validates configured credentials before creating a signed app session and sanitizes `next`; sign-out deletes the app session cookie.                                                      |
+| Sign-in redirects                            | `safeRedirectPath` rejects external, protocol-relative, and backslash-containing destinations before redirecting.                                                                                 |
 
 The proxy is an early gate, not the sole authorization check. The signed `session` cookie is the authorization source; a browser-provided identity or NextAuth provider session alone does not grant app-route access.
 
@@ -70,4 +72,6 @@ Google sign-in normally returns users to `/orders`, or to a valid `next` path wh
 
 ## Demo limitations
 
-Demo credentials and secrets are environment-configured. Registered accounts persist locally in `data/users.json`, but this file-based store is for a single local server only; it will not persist correctly on Vercel/serverless or across multiple server instances. Orders are stored in memory in `src/lib/orders.js` and are lost when the server restarts. Signup does not yet include email verification, password reset, or rate limiting; use persistent production storage and abuse protection before exposing it publicly.
+For Vercel, create a Neon Postgres database, copy its pooled connection string into the `DATABASE_URL` environment variable in **Project Settings > Environment Variables**, then redeploy. Set it for every environment where signup should work (Production and, if used, Preview). The account table is created automatically on the first account lookup or signup.
+
+Demo credentials and secrets are environment-configured. Registered accounts persist locally in `data/users.json` during development and use Neon Postgres in production. Orders are persisted to Neon Postgres through `src/lib/orders.js` in production and kept in memory during local development. Signup does not yet include email verification, password reset, or rate limiting; configure persistent production storage and abuse protection before exposing it publicly.

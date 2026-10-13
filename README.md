@@ -65,7 +65,7 @@ npm run lint
 - Dish detail pages generated from the dish catalog
 - Dynamic SEO metadata for each dish page and a global site metadata configuration
 - Open Graph metadata and title template setup for better sharing and page previews
-- In-memory cart with quantity editing; cart contents reset on a full page reload
+- Browser-persisted cart with quantity editing; cart contents survive page reloads
 - Checkout through a server action with schema validation and server-side pricing
 - Google OAuth and configured demo email/password sign-in
 - Customer account registration with local file persistence and scrypt password hashing
@@ -107,10 +107,26 @@ The current Day 44 update adds metadata to the app using Next.js App Router conv
 - Order prices and delivery fees are recomputed on the server; browser-provided totals are not trusted.
 - Registered customer accounts are stored in the ignored local `data/users.json` file by `src/lib/users.js`; passwords are scrypt-hashed. No external database is required for local development.
 - Local file-backed accounts are not suitable for Vercel/serverless or multi-instance deployments because their filesystem is ephemeral and instance-local.
-- Order writes use the serialized in-memory flow in `src/lib/orders.js`.
-- Orders are lost when the server restarts. This is a teaching demo, not a production backend or payment integration.
+- Orders are persisted to Neon Postgres through `src/lib/orders.js` whenever `DATABASE_URL` is set; local development falls back to an in-memory store.
+- This is a teaching demo, not a production backend or payment integration.
 
 See [DATA.md](DATA.md) for query locations, logical keys, refresh behavior, and cache/privacy notes. See [PERF.md](PERF.md) for the performance budget and before/after measurements.
+
+## Deployment (Vercel + Neon)
+
+The app is built to deploy on Vercel with a Neon Postgres database. Set these environment variables in the project:
+
+| Variable                                                                                             | Purpose                                                                                          |
+| ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `DATABASE_URL`                                                                                       | Neon Postgres connection string. Required in production for customer accounts and orders.        |
+| `SESSION_SECRET`                                                                                     | Signing key for the app session cookie (at least 32 characters).                                 |
+| `AUTH_SECRET`                                                                                        | NextAuth secret for Google OAuth sessions.                                                       |
+| `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET`                                                              | Google OAuth client credentials (optional if you only use email/password sign-in).              |
+| `DEMO_CUSTOMER_EMAIL` / `DEMO_CUSTOMER_PASSWORD` / `DEMO_STAFF_EMAIL` / `DEMO_STAFF_PASSWORD`         | Seeded demo accounts. Change the default passwords before going live.                            |
+
+The `customer_accounts` and `orders` tables are created automatically on first use. When using Google OAuth, add `https://<your-domain>/api/auth/callback/google` as an authorized redirect URI on the Google client.
+
+Customer flow after deploy: open `/signup`, create an account, sign in, add dishes to the cart, and place an order — it is stored in Postgres and visible on `/orders` and in the staff `/kitchen` and `/admin` views.
 
 ## Teaching goals
 

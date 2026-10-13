@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs";
+import { neon } from "@neondatabase/serverless";
 import {
   randomBytes,
   randomUUID,
@@ -59,6 +60,38 @@ const scrypt = promisify(scryptCallback);
 const dataDirectory = path.join(process.cwd(), "data");
 const usersFile = path.join(dataDirectory, "users.json");
 let writeQueue = Promise.resolve();
+let databaseClient;
+let databaseSchemaPromise;
+
+async function getAccountDatabase() {
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("DATABASE_URL must be configured in production.");
+    }
+    return null;
+  }
+
+  databaseClient ??= neon(connectionString);
+  databaseSchemaPromise ??= databaseClient`
+    CREATE TABLE IF NOT EXISTS customer_accounts (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      email TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      salt TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'customer',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `
+    .then(() => undefined)
+    .catch((error) => {
+      databaseSchemaPromise = undefined;
+      throw error;
+    });
+  await databaseSchemaPromise;
+  return databaseClient;
+}
 
 async function readAccounts() {
   try {
@@ -106,6 +139,17 @@ export async function createCustomerAccount(name, email, password) {
   const normalizedEmail = email.trim().toLowerCase();
   const salt = randomBytes(16).toString("hex");
   const passwordHash = await hashPassword(password, salt);
+  const database = await getAccountDatabase();
+
+  if (database) {
+    const accounts = await database`
+      INSERT INTO customer_accounts (id, name, email, password_hash, salt)
+      VALUES (${randomUUID()}, ${normalizedName}, ${normalizedEmail}, ${passwordHash}, ${salt})
+      ON CONFLICT (email) DO NOTHING
+      RETURNING id, name, email, role
+    `;
+    return accounts[0] ?? null;
+  }
 
   return serializeWrite(async () => {
     const accounts = await readAccounts();
@@ -135,10 +179,22 @@ export async function createCustomerAccount(name, email, password) {
 
 export async function authenticateRegisteredCustomer(email, password) {
   const normalizedEmail = email.trim().toLowerCase();
-  const account = (await readAccounts()).find(
-    (candidate) =>
-      candidate.email === normalizedEmail && candidate.role === "customer",
-  );
+  const database = await getAccountDatabase();
+  let account;
+
+  if (database) {
+    [account] = await database`
+      SELECT id, email, password_hash, salt, role
+      FROM customer_accounts
+      WHERE email = ${normalizedEmail} AND role = 'customer'
+      LIMIT 1
+    `;
+  } else {
+    account = (await readAccounts()).find(
+      (candidate) =>
+        candidate.email === normalizedEmail && candidate.role === "customer",
+    );
+  }
 
   if (!account) return null;
 
@@ -146,7 +202,10 @@ export async function authenticateRegisteredCustomer(email, password) {
     await hashPassword(password, account.salt),
     "hex",
   );
-  const expectedHash = Buffer.from(account.passwordHash, "hex");
+  const expectedHash = Buffer.from(
+    account.password_hash ?? account.passwordHash,
+    "hex",
+  );
   if (
     actualHash.length !== expectedHash.length ||
     !timingSafeEqual(actualHash, expectedHash)

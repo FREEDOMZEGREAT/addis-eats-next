@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { placeOrder } from "@/app/actions";
 import { useCart } from "@/app/providers";
 import { DELIVERY_AREAS, AREA_FEE } from "@/lib/schema";
@@ -16,6 +16,7 @@ const initialState = {
 export default function CheckoutForm() {
   const [state, formAction, pending] = useActionState(placeOrder, initialState);
   const { items, total, orderItems, clearCart } = useCart();
+  const [area, setArea] = useState(DELIVERY_AREAS[0]);
   const formRef = useRef(null);
   const hasClearedCartRef = useRef(false);
 
@@ -33,7 +34,7 @@ export default function CheckoutForm() {
   }, [state.formError]);
 
   const errors = state.fieldErrors ?? {};
-  const fee = AREA_FEE.Bole;
+  const fee = AREA_FEE[area] ?? 0;
 
   if (state.id) {
     return (
@@ -173,7 +174,8 @@ export default function CheckoutForm() {
               <select
                 id="area"
                 name="area"
-                defaultValue="Bole"
+                value={area}
+                onChange={(event) => setArea(event.target.value)}
                 aria-invalid={Boolean(errors.area)}
                 aria-describedby={errors.area ? "area-error" : "area-hint"}
                 className="field"
@@ -204,7 +206,7 @@ export default function CheckoutForm() {
         </fieldset>
       </section>
 
-      <OrderSummary items={items} subtotal={total} fee={fee} />
+      <OrderSummary items={items} subtotal={total} fee={fee} area={area} />
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <button
@@ -274,7 +276,7 @@ function describedBy(id, error, hintId) {
   return hintId;
 }
 
-function OrderSummary({ items, subtotal, fee }) {
+function OrderSummary({ items, subtotal, fee, area }) {
   if (items.length === 0) {
     return (
       <div className="card flex flex-col items-center gap-3 p-8 text-center">
@@ -350,7 +352,7 @@ function OrderSummary({ items, subtotal, fee }) {
           <dd className="price text-sand-800">{subtotal} ETB</dd>
         </div>
         <div className="flex justify-between">
-          <dt className="text-sand-500">Delivery (from Bole)</dt>
+          <dt className="text-sand-500">Delivery ({area})</dt>
           <dd className="price text-sand-800">{fee} ETB</dd>
         </div>
         <div className="divider my-2" />

@@ -1,8 +1,81 @@
 "use client";
 
-import { createContext, useContext, useMemo, useState } from "react";
+import {
+  createContext,
+  useContext,
+  useMemo,
+  useSyncExternalStore,
+} from "react";
 
 const CartContext = createContext(null);
+const STORAGE_KEY = "addis-eats-cart";
+const EMPTY_CART = [];
+
+function sanitizeCart(value) {
+  if (!Array.isArray(value)) return [];
+  return value.filter(
+    (item) =>
+      item &&
+      item.id != null &&
+      Number.isFinite(item.price) &&
+      Number.isFinite(item.qty),
+  );
+}
+
+function createCartStore() {
+  let items = EMPTY_CART;
+  let loaded = false;
+  const listeners = new Set();
+
+  function emit() {
+    for (const listener of listeners) listener();
+  }
+
+  // Hydrate from localStorage once, the first time the browser subscribes.
+  function load() {
+    if (loaded || typeof window === "undefined") return;
+    loaded = true;
+    let stored = EMPTY_CART;
+    try {
+      stored = sanitizeCart(
+        JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "[]"),
+      );
+    } catch {
+      stored = EMPTY_CART;
+    }
+    if (stored.length > 0) {
+      items = stored;
+      emit();
+    }
+  }
+
+  function persist(next) {
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      // Storage unavailable (private mode, quota) — cart stays in memory.
+    }
+  }
+
+  return {
+    subscribe(listener) {
+      listeners.add(listener);
+      load();
+      return () => listeners.delete(listener);
+    },
+    getSnapshot() {
+      return items;
+    },
+    getServerSnapshot() {
+      return EMPTY_CART;
+    },
+    set(updater) {
+      items = typeof updater === "function" ? updater(items) : updater;
+      persist(items);
+      emit();
+    },
+  };
+}
 
 export function useCart() {
   const ctx = useContext(CartContext);
@@ -11,14 +84,19 @@ export function useCart() {
 }
 
 export function Providers({ children }) {
-  const [items, setItems] = useState([]);
+  const store = useMemo(() => createCartStore(), []);
+  const items = useSyncExternalStore(
+    store.subscribe,
+    store.getSnapshot,
+    store.getServerSnapshot,
+  );
 
   const value = useMemo(() => {
     const count = items.reduce((sum, i) => sum + i.qty, 0);
     const total = items.reduce((sum, i) => sum + i.price * i.qty, 0);
 
     function addToCart(dish, qty = 1) {
-      setItems((prev) => {
+      store.set((prev) => {
         const found = prev.find((i) => i.id === dish.id);
         if (!found) {
           return [
@@ -39,7 +117,7 @@ export function Providers({ children }) {
     }
 
     function setQty(id, qty) {
-      setItems((prev) =>
+      store.set((prev) =>
         qty <= 0
           ? prev.filter((i) => i.id !== id)
           : prev.map((i) => (i.id === id ? { ...i, qty } : i)),
@@ -47,11 +125,11 @@ export function Providers({ children }) {
     }
 
     function removeFromCart(id) {
-      setItems((prev) => prev.filter((i) => i.id !== id));
+      store.set((prev) => prev.filter((i) => i.id !== id));
     }
 
     function clearCart() {
-      setItems([]);
+      store.set([]);
     }
 
     // The shape the checkout server action expects.
@@ -67,7 +145,7 @@ export function Providers({ children }) {
       removeFromCart,
       clearCart,
     };
-  }, [items]);
+  }, [items, store]);
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }

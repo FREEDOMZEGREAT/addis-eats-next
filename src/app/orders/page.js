@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getOrders } from "@/lib/orders";
+import { getDishName } from "@/lib/dishes";
 import { getSession } from "@/lib/session";
 import CancelOrderButton from "./CancelOrderButton";
 import OrderStatus from "./OrderStatus";
@@ -102,7 +103,7 @@ export default async function OrdersPage() {
                     <dt className="w-16 text-sand-400">Items</dt>
                     <dd className="text-sand-700">
                       {o.items
-                        .map((i) => `${i.qty}× ${dishLabel(i.id)}`)
+                        .map((i) => `${i.qty}× ${getDishName(i.id)}`)
                         .join(", ")}
                     </dd>
                   </div>
@@ -134,11 +135,4 @@ export default async function OrdersPage() {
       )}
     </div>
   );
-}
-
-function dishLabel(id) {
-  return id
-    .split("-")
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
 }

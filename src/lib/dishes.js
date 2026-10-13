@@ -406,6 +406,11 @@ export async function getDish(id) {
   return dishes.find((dish) => dish.id === dishId) ?? null;
 }
 
+export function getDishName(id) {
+  const dish = dishes.find((entry) => String(entry.id) === String(id));
+  return dish?.name ?? `Dish #${id}`;
+}
+
 export async function getDishesByCategory(category = "All", query = "") {
   const normalizedCategory = normalizeCategory(category);
   const search = String(query ?? "")
