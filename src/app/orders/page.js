@@ -3,9 +3,11 @@ import { redirect } from "next/navigation";
 import { getOrders } from "@/lib/orders";
 import { getDishName } from "@/lib/dishes";
 import { getSession } from "@/lib/session";
+import { formatCurrency, formatDateTime } from "@/lib/format";
 import CancelOrderButton from "./CancelOrderButton";
 import OrderStatus from "./OrderStatus";
 import SignOutButton from "@/app/SignOutButton";
+import ExportCsvButton from "./ExportCsvButton";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +36,10 @@ export default async function OrdersPage() {
               Signed in as {user.email}
             </p>
           </div>
-          <SignOutButton />
+          <div className="flex flex-wrap items-center gap-2">
+            {orders.length > 0 && <ExportCsvButton orders={orders} />}
+            <SignOutButton />
+          </div>
         </div>
       </header>
 
@@ -75,10 +80,7 @@ export default async function OrdersPage() {
                 </span>
                 <OrderStatus order={o} />
                 <span className="ml-auto text-xs text-sand-400">
-                  {new Date(o.createdAt).toLocaleString("en-GB", {
-                    dateStyle: "medium",
-                    timeStyle: "short",
-                  })}
+                  {formatDateTime(o.createdAt)}
                 </span>
               </div>
 
@@ -119,14 +121,19 @@ export default async function OrdersPage() {
 
                 <div className="text-right">
                   <p className="price text-2xl text-brand-700">
-                    {o.total}
-                    <span className="ml-1 text-sm font-medium text-sand-400">
-                      {o.currency}
-                    </span>
+                    {formatCurrency(o.total, o.currency)}
                   </p>
-                  {o.status !== "cancelled" && (
-                    <CancelOrderButton orderId={o.id} />
-                  )}
+                  <div className="mt-2 flex items-center justify-end gap-2">
+                    <Link
+                      href={`/track/${o.id}`}
+                      className="btn btn-outline px-3 text-xs"
+                    >
+                      Track order
+                    </Link>
+                    {o.status !== "cancelled" && (
+                      <CancelOrderButton orderId={o.id} />
+                    )}
+                  </div>
                 </div>
               </div>
             </li>

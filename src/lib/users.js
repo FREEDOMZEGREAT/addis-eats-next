@@ -11,6 +11,15 @@ import { promisify } from "node:util";
 import os from "node:os";
 import path from "node:path";
 
+export function usernameToEmail(username) {
+  const slug = String(username ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return `${slug || "user"}@customer.local`;
+}
+
 const g = globalThis;
 
 if (!g.__users) {

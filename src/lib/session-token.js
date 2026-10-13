@@ -17,9 +17,14 @@ function decodeBase64Url(value) {
   return Uint8Array.from(atob(padded), (character) => character.charCodeAt(0));
 }
 
-async function getSigningKey() {
+export function isSessionConfigured() {
   const secret = process.env.SESSION_SECRET;
-  if (!secret || encoder.encode(secret).length < 32) return null;
+  return Boolean(secret) && encoder.encode(secret).length >= 32;
+}
+
+async function getSigningKey() {
+  if (!isSessionConfigured()) return null;
+  const secret = process.env.SESSION_SECRET;
 
   return globalThis.crypto.subtle.importKey(
     "raw",

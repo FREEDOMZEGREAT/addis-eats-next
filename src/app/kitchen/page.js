@@ -57,6 +57,12 @@ export default async function KitchenPage() {
               </p>
               <span className="badge badge-gold">{order.status}</span>
               <p className="price text-brand-700">{order.total} ETB</p>
+              <Link
+                href={`/track/${order.id}`}
+                className="btn btn-outline px-3 text-xs"
+              >
+                Track
+              </Link>
             </li>
           ))}
         </ul>

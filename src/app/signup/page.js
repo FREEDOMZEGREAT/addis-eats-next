@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
-import { safeRedirectPath } from "@/lib/session-token";
+import { isSessionConfigured, safeRedirectPath } from "@/lib/session-token";
 import { signUp } from "@/app/auth-actions";
 
 export const metadata = {
@@ -13,9 +13,11 @@ export const metadata = {
 
 const ERROR_MESSAGES = {
   invalid:
-    "Enter your name, a valid email, and a password between 6 and 128 characters.",
-  exists: "An account already uses this email. Sign in instead.",
+    "Enter your name and a password between 6 and 128 characters.",
+  exists: "This name is already taken. Try another name or sign in.",
   unavailable: "Account creation is unavailable. Please try again later.",
+  config:
+    "Sign-up is not configured on this server yet. An administrator must set a SESSION_SECRET of at least 32 characters.",
 };
 
 export default async function SignUpPage({ searchParams }) {
@@ -28,6 +30,7 @@ export default async function SignUpPage({ searchParams }) {
 
   if (session) redirect(nextPath);
 
+  const configured = isSessionConfigured();
   const errorMessage = ERROR_MESSAGES[params?.error];
 
   return (
@@ -42,12 +45,12 @@ export default async function SignUpPage({ searchParams }) {
       <form action={signUp} className="card space-y-5 p-5 sm:p-7">
         <input type="hidden" name="next" value={nextPath} />
 
-        {errorMessage && (
+        {(!configured || errorMessage) && (
           <p
             role="alert"
             className="rounded-field bg-danger-50 p-3 text-sm text-danger-700"
           >
-            {errorMessage}
+            {configured ? errorMessage : ERROR_MESSAGES.config}
           </p>
         )}
 
@@ -64,24 +67,6 @@ export default async function SignUpPage({ searchParams }) {
             type="text"
             autoComplete="name"
             maxLength={100}
-            required
-            className="field"
-          />
-        </div>
-
-        <div>
-          <label
-            htmlFor="signup-email"
-            className="mb-1.5 block text-sm font-semibold"
-          >
-            Email
-          </label>
-          <input
-            id="signup-email"
-            name="email"
-            type="email"
-            autoComplete="email"
-            maxLength={254}
             required
             className="field"
           />

@@ -1,9 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
-import { safeRedirectPath } from "@/lib/session-token";
+import { isSessionConfigured, safeRedirectPath } from "@/lib/session-token";
 import { signIn as loginWithCredentials } from "@/app/auth-actions";
-import { signIn as oauthSignIn } from "@/auth";
 
 export const metadata = {
   title: "Sign in",
@@ -14,6 +13,7 @@ export const metadata = {
 export default async function SignInPage({ searchParams }) {
   const params = await searchParams;
   const session = await getSession();
+  const configured = isSessionConfigured();
   const nextPath =
     typeof params?.next === "string" ? safeRedirectPath(params.next) : "";
 
@@ -36,39 +36,25 @@ export default async function SignInPage({ searchParams }) {
       </div>
 
       <div className="card space-y-5 p-5 sm:p-7">
-        <form
-          action={async () => {
-            "use server";
-            await oauthSignIn("google", {
-              redirectTo: nextPath || "/orders",
-            });
-          }}
-        >
-          <button type="submit" className="btn btn-outline w-full">
-            Continue with Google
-          </button>
-        </form>
-
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-sand-200" />
-          </div>
-          <div className="relative flex justify-center text-xs uppercase tracking-[0.18em] text-sand-400">
-            <span className="bg-white px-3">
-              Or continue with email or phone
-            </span>
-          </div>
-        </div>
-
         <form action={loginWithCredentials} className="space-y-5">
           <input type="hidden" name="next" value={nextPath} />
 
-          {params?.error === "invalid" && (
+          {(!configured || params?.error === "config") && (
             <p
               role="alert"
               className="rounded-field bg-danger-50 p-3 text-sm text-danger-700"
             >
-              Email or password is incorrect.
+              Sign-in is not configured on this server yet. An administrator
+              must set a SESSION_SECRET of at least 32 characters.
+            </p>
+          )}
+
+          {configured && params?.error === "invalid" && (
+            <p
+              role="alert"
+              className="rounded-field bg-danger-50 p-3 text-sm text-danger-700"
+            >
+              Name or password is incorrect.
             </p>
           )}
 
@@ -77,7 +63,7 @@ export default async function SignInPage({ searchParams }) {
               htmlFor="identifier"
               className="mb-1.5 block text-sm font-semibold"
             >
-              Email or phone number
+              Name
             </label>
             <input
               id="identifier"

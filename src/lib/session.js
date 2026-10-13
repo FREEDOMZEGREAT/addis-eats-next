@@ -1,6 +1,17 @@
 import { cookies } from "next/headers";
 import { createSessionToken, verifySessionToken } from "./session-token";
-import { authenticatePhoneUser, authenticateRegisteredCustomer } from "./users";
+import {
+  authenticatePhoneUser,
+  authenticateRegisteredCustomer,
+  usernameToEmail,
+} from "./users";
+
+const ADMIN_USER = {
+  id: "staff-admin",
+  email: "admin",
+  password: "admin1234",
+  role: "staff",
+};
 
 const SESSION_COOKIE = "session";
 const SESSION_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
@@ -42,6 +53,10 @@ function getAdditionalDemoUsers() {
   }
 }
 
+function normalizeIdentifier(identifier) {
+  return String(identifier).trim().toLowerCase();
+}
+
 export function isReservedAccountEmail(email) {
   const normalizedEmail = email.trim().toLowerCase();
   const configuredEmails = [
@@ -71,16 +86,18 @@ export async function authenticateCredentials(identifier, password) {
   if (phoneUser) return phoneUser;
 
   const normalizedEmail = identifier.trim().toLowerCase();
+
   const users = [
+    ADMIN_USER,
     {
       id: "customer-1",
-      email: process.env.DEMO_CUSTOMER_EMAIL?.trim().toLowerCase(),
+      email: process.env.DEMO_CUSTOMER_EMAIL ?? "",
       password: process.env.DEMO_CUSTOMER_PASSWORD,
       role: "customer",
     },
     {
       id: "staff-1",
-      email: process.env.DEMO_STAFF_EMAIL?.trim().toLowerCase(),
+      email: process.env.DEMO_STAFF_EMAIL ?? "",
       password: process.env.DEMO_STAFF_PASSWORD,
       role: "staff",
     },
@@ -91,12 +108,19 @@ export async function authenticateCredentials(identifier, password) {
     (candidate) =>
       candidate.email &&
       candidate.password &&
-      candidate.email === normalizedEmail &&
+      normalizeIdentifier(candidate.email) === normalizedEmail &&
       candidate.password === password,
   );
 
   if (user) return { id: user.id, email: user.email, role: user.role };
-  return authenticateRegisteredCustomer(normalizedEmail, password);
+
+  const registered = await authenticateRegisteredCustomer(
+    normalizedEmail,
+    password,
+  );
+  if (registered) return registered;
+
+  return authenticateRegisteredCustomer(usernameToEmail(identifier), password);
 }
 
 export async function createSession(user) {
