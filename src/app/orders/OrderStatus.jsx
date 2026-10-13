@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import useSWR from "swr";
+import { fetcher } from "@/lib/fetcher";
 
 const STATUS_STYLES = {
   pending: "badge-gold",
@@ -13,23 +14,15 @@ const STATUS_STYLES = {
 const FINAL_STATUSES = new Set(["delivered", "cancelled"]);
 
 export default function OrderStatus({ order }) {
-  const [status, setStatus] = useState(order.status);
-
-  useEffect(() => {
-    if (FINAL_STATUSES.has(status)) return;
-
-    const interval = setInterval(() => {
-      fetch(`/api/orders/${order.id}`, { cache: "no-store" })
-        .then((response) => {
-          if (!response.ok) throw new Error("Order status request failed");
-          return response.json();
-        })
-        .then((latestOrder) => setStatus(latestOrder.status))
-        .catch(() => {});
-    }, 10_000);
-
-    return () => clearInterval(interval);
-  }, [order.id, status]);
+  const orderStatusUrl = FINAL_STATUSES.has(order.status)
+    ? null
+    : `/api/orders/${order.id}`;
+  const { data } = useSWR(orderStatusUrl, fetcher, {
+    fallbackData: { status: order.status },
+    refreshInterval: (latestOrder) =>
+      latestOrder && FINAL_STATUSES.has(latestOrder.status) ? 0 : 10_000,
+  });
+  const status = data?.status ?? order.status;
 
   return (
     <span className={`badge ${STATUS_STYLES[status] ?? "badge-neutral"}`}>

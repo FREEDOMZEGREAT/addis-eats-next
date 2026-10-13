@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { createSessionToken, verifySessionToken } from "./session-token";
-import { authenticateRegisteredCustomer } from "./users";
+import { authenticatePhoneUser, authenticateRegisteredCustomer } from "./users";
 
 const SESSION_COOKIE = "session";
 const SESSION_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
@@ -62,10 +62,15 @@ export async function getSession() {
   return verifySessionToken(cookieStore.get(SESSION_COOKIE)?.value);
 }
 
-export async function authenticateCredentials(email, password) {
-  if (typeof email !== "string" || typeof password !== "string") return null;
+export async function authenticateCredentials(identifier, password) {
+  if (typeof identifier !== "string" || typeof password !== "string") {
+    return null;
+  }
 
-  const normalizedEmail = email.trim().toLowerCase();
+  const phoneUser = authenticatePhoneUser(identifier, password);
+  if (phoneUser) return phoneUser;
+
+  const normalizedEmail = identifier.trim().toLowerCase();
   const users = [
     {
       id: "customer-1",

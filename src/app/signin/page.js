@@ -54,7 +54,9 @@ export default async function SignInPage({ searchParams }) {
             <div className="w-full border-t border-sand-200" />
           </div>
           <div className="relative flex justify-center text-xs uppercase tracking-[0.18em] text-sand-400">
-            <span className="bg-white px-3">Or continue with email</span>
+            <span className="bg-white px-3">
+              Or continue with email or phone
+            </span>
           </div>
         </div>
 
@@ -72,15 +74,15 @@ export default async function SignInPage({ searchParams }) {
 
           <div>
             <label
-              htmlFor="email"
+              htmlFor="identifier"
               className="mb-1.5 block text-sm font-semibold"
             >
-              Email
+              Email or phone number
             </label>
             <input
-              id="email"
-              name="email"
-              type="email"
+              id="identifier"
+              name="identifier"
+              type="text"
               autoComplete="username"
               required
               className="field"

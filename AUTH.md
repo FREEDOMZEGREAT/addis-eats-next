@@ -27,7 +27,7 @@ Configure this authorized redirect URI in the Google OAuth client:
 http://localhost:3000/api/auth/callback/google
 ```
 
-No external database is required. Start the app with `npm run dev` and open `/signin`. From there, new customers can follow **Create an account**; signup returns to the requested local path, including `/checkout`. New accounts are customer-only, emails are unique and normalized, and passwords of 12-128 characters are scrypt-hashed before storage in the ignored local `data/users.json` file. Existing credential accounts continue to work.
+No external database is required for local development. Start the app with `npm run dev` and open `/signin`. From there, new customers can follow **Create an account**; signup returns to the requested local path, including `/checkout`. New accounts are customer-only, emails are unique and normalized, and passwords of 6-128 characters are scrypt-hashed before storage in the ignored local `data/users.json` file. Existing credential accounts continue to work.
 
 Any Google account that provides an email can sign in. Google users default to the `customer` role; addresses matching `DEMO_STAFF_EMAIL` or any entry in `DEMO_STAFF_EMAILS` receive the `staff` role. Email/password sign-in accepts the two legacy accounts (`DEMO_CUSTOMER_*` and `DEMO_STAFF_*`), locally registered accounts, plus optional accounts in `DEMO_USERS_JSON`. Each JSON account needs a unique email, password, and either the `customer` or `staff` role. Restart the development server after changing `.env.local`.
 

@@ -15,7 +15,7 @@ export async function signIn(formData) {
   let user;
   try {
     user = await authenticateCredentials(
-      formData.get("email"),
+      formData.get("identifier"),
       formData.get("password"),
     );
   } catch (error) {
@@ -39,24 +39,23 @@ export async function signIn(formData) {
 
 export async function signUp(formData) {
   const nextPath = safeRedirectPath(formData.get("next"));
+  const nameValue = formData.get("name");
   const emailValue = formData.get("email");
   const password = formData.get("password");
-  const confirmation = formData.get("confirmPassword");
+  const name = typeof nameValue === "string" ? nameValue.trim() : "";
   const email =
     typeof emailValue === "string" ? emailValue.trim().toLowerCase() : "";
 
   if (
+    !name ||
+    name.length > 100 ||
     !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
     email.length > 254 ||
     typeof password !== "string" ||
-    password.length < 12 ||
+    password.length < 6 ||
     password.length > 128
   ) {
     redirect(`/signup?error=invalid&next=${encodeURIComponent(nextPath)}`);
-  }
-
-  if (password !== confirmation) {
-    redirect(`/signup?error=mismatch&next=${encodeURIComponent(nextPath)}`);
   }
 
   if (isReservedAccountEmail(email)) {
@@ -65,7 +64,7 @@ export async function signUp(formData) {
 
   let user;
   try {
-    user = await createCustomerAccount(email, password);
+    user = await createCustomerAccount(name, email, password);
   } catch (error) {
     console.error("Account registration failed.", error.name);
     redirect(`/signup?error=unavailable&next=${encodeURIComponent(nextPath)}`);

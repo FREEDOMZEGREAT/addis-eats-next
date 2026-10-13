@@ -12,8 +12,8 @@ export const metadata = {
 };
 
 const ERROR_MESSAGES = {
-  invalid: "Enter a valid email and a password between 12 and 128 characters.",
-  mismatch: "The passwords do not match.",
+  invalid:
+    "Enter your name, a valid email, and a password between 6 and 128 characters.",
   exists: "An account already uses this email. Sign in instead.",
   unavailable: "Account creation is unavailable. Please try again later.",
 };
@@ -53,6 +53,24 @@ export default async function SignUpPage({ searchParams }) {
 
         <div>
           <label
+            htmlFor="signup-name"
+            className="mb-1.5 block text-sm font-semibold"
+          >
+            Name
+          </label>
+          <input
+            id="signup-name"
+            name="name"
+            type="text"
+            autoComplete="name"
+            maxLength={100}
+            required
+            className="field"
+          />
+        </div>
+
+        <div>
+          <label
             htmlFor="signup-email"
             className="mb-1.5 block text-sm font-semibold"
           >
@@ -81,31 +99,12 @@ export default async function SignUpPage({ searchParams }) {
             name="password"
             type="password"
             autoComplete="new-password"
-            minLength={12}
+            minLength={6}
             maxLength={128}
             required
             className="field"
           />
-          <p className="field-hint">Use at least 12 characters.</p>
-        </div>
-
-        <div>
-          <label
-            htmlFor="signup-confirm-password"
-            className="mb-1.5 block text-sm font-semibold"
-          >
-            Confirm password
-          </label>
-          <input
-            id="signup-confirm-password"
-            name="confirmPassword"
-            type="password"
-            autoComplete="new-password"
-            minLength={12}
-            maxLength={128}
-            required
-            className="field"
-          />
+          <p className="field-hint">Use at least 6 characters.</p>
         </div>
 
         <button type="submit" className="btn btn-primary w-full">

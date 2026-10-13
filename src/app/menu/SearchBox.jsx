@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import useSWR from "swr";
+import { fetcher } from "@/lib/fetcher";
 import DishList from "./DishList";
 
 export default function LiveDishSearch({
@@ -10,9 +12,6 @@ export default function LiveDishSearch({
 }) {
   const [search, setSearch] = useState(initialQuery);
   const [debouncedSearch, setDebouncedSearch] = useState(initialQuery);
-  const [results, setResults] = useState(initialDishes);
-  const [completedQuery, setCompletedQuery] = useState(initialQuery);
-  const [errorQuery, setErrorQuery] = useState(null);
 
   useEffect(() => {
     const timeout = setTimeout(() => setDebouncedSearch(search.trim()), 300);
@@ -20,37 +19,18 @@ export default function LiveDishSearch({
   }, [search]);
 
   const query = debouncedSearch;
+  const params = new URLSearchParams({
+    category: initialCategory === "All" ? "" : initialCategory,
+    q: query,
+  });
+  const searchKey =
+    query === initialQuery ? null : `/api/dishes?${params.toString()}`;
+  const { data, error, isLoading, isValidating } = useSWR(searchKey, fetcher, {
+    keepPreviousData: true,
+  });
 
-  useEffect(() => {
-    if (query === initialQuery) return;
-
-    const controller = new AbortController();
-    const params = new URLSearchParams({
-      category: initialCategory === "All" ? "" : initialCategory,
-      q: query,
-    });
-
-    fetch(`/api/dishes?${params}`, { signal: controller.signal })
-      .then((response) => {
-        if (!response.ok) throw new Error("Menu request failed");
-        return response.json();
-      })
-      .then((data) => {
-        setResults(data);
-        setCompletedQuery(query);
-        setErrorQuery(null);
-      })
-      .catch((requestError) => {
-        if (requestError.name !== "AbortError") setErrorQuery(query);
-      });
-
-    return () => controller.abort();
-  }, [initialCategory, initialQuery, query]);
-
-  const dishes = query === initialQuery ? initialDishes : results;
-  const isFetching =
-    query !== initialQuery && completedQuery !== query && errorQuery !== query;
-  const error = errorQuery === query;
+  const dishes = query === initialQuery ? initialDishes : (data ?? []);
+  const isFetching = query !== initialQuery && (isLoading || isValidating);
   const itemCount = dishes.length;
 
   return (

@@ -1,3 +1,4 @@
+import bcrypt from "bcryptjs";
 import {
   randomBytes,
   randomUUID,
@@ -7,6 +8,52 @@ import {
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import path from "node:path";
+
+const g = globalThis;
+
+if (!g.__users) {
+  g.__users = [
+    {
+      id: "usr_1",
+      name: "Almaz",
+      phone: "0912345678",
+      role: "customer",
+      passwordHash: bcrypt.hashSync("customer123", 10),
+    },
+    {
+      id: "usr_2",
+      name: "Kitchen Staff",
+      phone: "0911000000",
+      role: "staff",
+      passwordHash: bcrypt.hashSync("staff123", 10),
+    },
+  ];
+}
+
+export const users = g.__users;
+
+export function findUserByPhone(phone) {
+  return users.find((user) => user.phone === phone);
+}
+
+export function createUser({ name, phone, password }) {
+  const user = {
+    id: `usr_${Date.now()}`,
+    name,
+    phone,
+    role: "customer",
+    passwordHash: bcrypt.hashSync(password, 10),
+  };
+  users.push(user);
+  return user;
+}
+
+export function authenticatePhoneUser(phone, password) {
+  const user = findUserByPhone(phone.trim());
+  if (!user || !bcrypt.compareSync(password, user.passwordHash)) return null;
+
+  return { id: user.id, email: user.phone, role: user.role };
+}
 
 const scrypt = promisify(scryptCallback);
 const dataDirectory = path.join(process.cwd(), "data");
@@ -54,7 +101,8 @@ async function persistAccounts(accounts) {
   }
 }
 
-export async function createCustomerAccount(email, password) {
+export async function createCustomerAccount(name, email, password) {
+  const normalizedName = name.trim();
   const normalizedEmail = email.trim().toLowerCase();
   const salt = randomBytes(16).toString("hex");
   const passwordHash = await hashPassword(password, salt);
@@ -67,6 +115,7 @@ export async function createCustomerAccount(email, password) {
 
     const account = {
       id: randomUUID(),
+      name: normalizedName,
       email: normalizedEmail,
       passwordHash,
       salt,
@@ -75,7 +124,12 @@ export async function createCustomerAccount(email, password) {
     };
 
     await persistAccounts([...accounts, account]);
-    return { id: account.id, email: account.email, role: account.role };
+    return {
+      id: account.id,
+      name: account.name,
+      email: account.email,
+      role: account.role,
+    };
   });
 }
 
