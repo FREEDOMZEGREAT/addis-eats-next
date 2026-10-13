@@ -19,7 +19,7 @@ export async function signIn(formData) {
       formData.get("password"),
     );
   } catch (error) {
-    console.error("Account sign-in lookup failed.", error.name);
+    console.error("Account sign-in lookup failed:", error);
     redirect("/signin?error=unavailable");
   }
 
@@ -66,7 +66,7 @@ export async function signUp(formData) {
   try {
     user = await createCustomerAccount(name, email, password);
   } catch (error) {
-    console.error("Account registration failed.", error.name);
+    console.error("Account registration failed:", error);
     redirect(`/signup?error=unavailable&next=${encodeURIComponent(nextPath)}`);
   }
 

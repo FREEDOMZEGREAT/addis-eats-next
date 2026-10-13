@@ -8,6 +8,7 @@ import {
 } from "node:crypto";
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
+import os from "node:os";
 import path from "node:path";
 
 const g = globalThis;
@@ -57,20 +58,31 @@ export function authenticatePhoneUser(phone, password) {
 }
 
 const scrypt = promisify(scryptCallback);
-const dataDirectory = path.join(process.cwd(), "data");
-const usersFile = path.join(dataDirectory, "users.json");
+
+// Registered accounts live in an in-memory store shared across the process
+// (globalThis keeps every route graph on the same array) and are mirrored to a
+// JSON file when the filesystem is writable. Serverless hosts such as Vercel
+// have a read-only or ephemeral filesystem, so there they degrade to the
+// in-memory store: signup and sign-in work for the session, but accounts do not
+// survive a restart or a different instance. Set DATABASE_URL for persistence.
+if (!g.__addisAccounts) g.__addisAccounts = [];
+const accountStore = g.__addisAccounts;
+
+function getAccountsFilePath() {
+  if (process.env.ACCOUNTS_FILE) return process.env.ACCOUNTS_FILE;
+  if (process.env.NODE_ENV === "production") {
+    return path.join(os.tmpdir(), "addis-eats-users.json");
+  }
+  return path.join(process.cwd(), "data", "users.json");
+}
+
 let writeQueue = Promise.resolve();
 let databaseClient;
 let databaseSchemaPromise;
 
 async function getAccountDatabase() {
   const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) {
-    if (process.env.NODE_ENV === "production") {
-      throw new Error("DATABASE_URL must be configured in production.");
-    }
-    return null;
-  }
+  if (!connectionString) return null;
 
   databaseClient ??= neon(connectionString);
   databaseSchemaPromise ??= databaseClient`
@@ -93,16 +105,20 @@ async function getAccountDatabase() {
   return databaseClient;
 }
 
-async function readAccounts() {
+async function loadAccounts() {
+  if (accountStore.length > 0) return accountStore;
+
   try {
-    const contents = await readFile(usersFile, "utf8");
+    const contents = await readFile(getAccountsFilePath(), "utf8");
     const accounts = JSON.parse(contents);
-    if (!Array.isArray(accounts)) throw new Error("Invalid account store.");
-    return accounts;
-  } catch (error) {
-    if (error.code === "ENOENT") return [];
-    throw error;
+    if (Array.isArray(accounts) && accounts.length > 0) {
+      accountStore.push(...accounts);
+    }
+  } catch {
+    // Missing, unreadable, or invalid file — start from the in-memory store.
   }
+
+  return accountStore;
 }
 
 function serializeWrite(operation) {
@@ -120,17 +136,22 @@ async function hashPassword(password, salt) {
 }
 
 async function persistAccounts(accounts) {
-  await mkdir(dataDirectory, { recursive: true, mode: 0o700 });
-  const temporaryFile = `${usersFile}.${randomUUID()}.tmp`;
-
   try {
-    await writeFile(temporaryFile, JSON.stringify(accounts), {
-      encoding: "utf8",
-      mode: 0o600,
-    });
-    await rename(temporaryFile, usersFile);
-  } finally {
-    await unlink(temporaryFile).catch(() => {});
+    const accountsFile = getAccountsFilePath();
+    await mkdir(path.dirname(accountsFile), { recursive: true, mode: 0o700 });
+    const temporaryFile = `${accountsFile}.${randomUUID()}.tmp`;
+
+    try {
+      await writeFile(temporaryFile, JSON.stringify(accounts), {
+        encoding: "utf8",
+        mode: 0o600,
+      });
+      await rename(temporaryFile, accountsFile);
+    } finally {
+      await unlink(temporaryFile).catch(() => {});
+    }
+  } catch {
+    // Read-only or ephemeral filesystem — keep the in-memory store only.
   }
 }
 
@@ -152,7 +173,7 @@ export async function createCustomerAccount(name, email, password) {
   }
 
   return serializeWrite(async () => {
-    const accounts = await readAccounts();
+    const accounts = await loadAccounts();
     if (accounts.some((account) => account.email === normalizedEmail)) {
       return null;
     }
@@ -167,7 +188,8 @@ export async function createCustomerAccount(name, email, password) {
       createdAt: new Date().toISOString(),
     };
 
-    await persistAccounts([...accounts, account]);
+    accounts.push(account);
+    await persistAccounts([...accounts]);
     return {
       id: account.id,
       name: account.name,
@@ -190,7 +212,7 @@ export async function authenticateRegisteredCustomer(email, password) {
       LIMIT 1
     `;
   } else {
-    account = (await readAccounts()).find(
+    account = (await loadAccounts()).find(
       (candidate) =>
         candidate.email === normalizedEmail && candidate.role === "customer",
     );

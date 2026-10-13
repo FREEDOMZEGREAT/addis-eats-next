@@ -105,8 +105,8 @@ The current Day 44 update adds metadata to the app using Next.js App Router conv
 - The cart is provided through `src/app/providers.jsx` and persisted in the browser.
 - The app's authorization cookie is created and verified by `src/lib/session.js` and `src/lib/session-token.js`.
 - Order prices and delivery fees are recomputed on the server; browser-provided totals are not trusted.
-- Registered customer accounts are stored in the ignored local `data/users.json` file by `src/lib/users.js`; passwords are scrypt-hashed. No external database is required for local development.
-- Local file-backed accounts are not suitable for Vercel/serverless or multi-instance deployments because their filesystem is ephemeral and instance-local.
+- Registered customer accounts are handled by `src/lib/users.js`: kept in an in-memory store and mirrored to the ignored local `data/users.json` file when the filesystem is writable. Passwords are scrypt-hashed. No external database is required.
+- On serverless hosts with a read-only or ephemeral filesystem (e.g. Vercel), accounts fall back to memory and do not survive a restart or a different instance; set `DATABASE_URL` for durable accounts. Passwordless “Continue with Google” sign-in needs no local account store at all.
 - Orders are persisted to Neon Postgres through `src/lib/orders.js` whenever `DATABASE_URL` is set; local development falls back to an in-memory store.
 - This is a teaching demo, not a production backend or payment integration.
 
@@ -118,10 +118,10 @@ The app is built to deploy on Vercel with a Neon Postgres database. Set these en
 
 | Variable                                                                                             | Purpose                                                                                          |
 | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `DATABASE_URL`                                                                                       | Neon Postgres connection string. Required in production for customer accounts and orders.        |
+| `DATABASE_URL`                                                                                       | Optional. Neon Postgres connection string; needed only for durable accounts and orders.          |
 | `SESSION_SECRET`                                                                                     | Signing key for the app session cookie (at least 32 characters).                                 |
 | `AUTH_SECRET`                                                                                        | NextAuth secret for Google OAuth sessions.                                                       |
-| `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET`                                                              | Google OAuth client credentials (optional if you only use email/password sign-in).              |
+| `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET`                                                              | Google OAuth credentials for passwordless sign-in (needs no database).                           |
 | `DEMO_CUSTOMER_EMAIL` / `DEMO_CUSTOMER_PASSWORD` / `DEMO_STAFF_EMAIL` / `DEMO_STAFF_PASSWORD`         | Seeded demo accounts. Change the default passwords before going live.                            |
 
 The `customer_accounts` and `orders` tables are created automatically on first use. When using Google OAuth, add `https://<your-domain>/api/auth/callback/google` as an authorized redirect URI on the Google client.
